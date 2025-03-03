@@ -1,0 +1,40 @@
+[
+    {
+        "op_name": "nonlinear",
+        "mode": "solver_with_pred",
+        "n_neurons": 50000,
+        "use_predictor": true,
+        "n_steps_max": 2000,
+        "alpha": 1.0,
+        "Tk_lim": 1e-10,
+        "n_layers": 1,
+        "act_fn": "leaky_relu",
+        "output_act_fn": "linear",
+        "N_epochs": 1000000,
+        "append_delay": 100,
+        "batch_size": 4096,
+        "weight_decay": 0.001,
+        "lr": 1e-5,
+        "log_loss": true,
+        "convexified": true,
+        "delta": 1000.0,
+        "update_mode": "eta_total",
+        "loss_mode": "explicit",
+        "id": "c84e4ec5-aa04-4267-a5f6-ddb1502e4e8d",
+        "trained": true,
+        "evaluated": false,
+        "exp_pth": "case_study_trial\\solver_with_pred\\nonlinear\\exp_0",
+        "predictor": {
+            "id": "3b269726-458c-4d85-99ce-23d3e5c850bc",
+            "n_neurons": 2048,
+            "n_layers": 1,
+            "act_fn": "leaky_relu",
+            "exp_pth": "case_study_trial\\predictor\\nonconvex_10x5x5_0\\exp_0"
+        },
+        "n_in": 26,
+        "n_out": 20,
+        "train_time": 1851.6000740999589,
+        "dtype": "torch.float32",
+        "n_params": 96276
+    }
+]
