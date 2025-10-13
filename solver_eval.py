@@ -126,11 +126,10 @@ lr = 1e-3
 
 # Solver
 solver_steps = 100
-alpha =1e-2 #torch.Tensor([1e-2]).cuda()
+alpha =1e-2
 Tk_lim = 1e-6
 resampling_delay = 100
-# gamma = 1.0 # 0.95
-# gamma_sum = sum([gamma**(solver_steps-i) for i in range(solver_steps)])
+
 
 # Verbosity
 print_frequency = 10
@@ -147,13 +146,12 @@ data_dir="./sampling"
 # %%
 # NN
 model = FeedforwardNN(n_in=n_in,n_out=n_out,n_hidden_layers=n_layers,n_neurons=n_neurons,act_fn=act_fn,output_act_fn=output_act_fn)
-#solver_nn = ExplicitSolverFramework(model,OP,mode="full")
 path=Path(__file__).parent.resolve()
-predictor=load_predictor_from_pth(path.joinpath("robust_case_study/predictor/nonlinear_96x48x192_0/exp_opt_1"))#324#312#313#310#305#244#255#244#245#240#194#168#194#191#157#143#123#96#105
-pth=path.joinpath("robust_case_study/solver_with_pred/nonlinear_96x48x192_0/exp_opt_1")#482#464#470#461#451#418#376#385#376#377#360#311#356#311#300#260#292#255#225#219#184#203
+predictor=load_predictor_from_pth(path.joinpath("robust_case_study/predictor/nonlinear_96x48x192_0/exp_opt_1"))
+pth=path.joinpath("robust_case_study/solver_with_pred/nonlinear_96x48x192_0/exp_opt_1")
 solver=load_solver_from_pth(pth,OP)
-predictor_z=load_predictor_from_pth(path.joinpath("robust_case_study/predictor/nonlinear_96x48x192_0/exp_opt_2"))#236#181#156
-pth=path.joinpath("robust_case_study/solver_with_pred/nonlinear_96x48x192_0/exp_opt_2")#500#484#492#479#352#264#247#219#184#203
+predictor_z=load_predictor_from_pth(path.joinpath("robust_case_study/predictor/nonlinear_96x48x192_0/exp_opt_2"))
+pth=path.joinpath("robust_case_study/solver_with_pred/nonlinear_96x48x192_0/exp_opt_2")
 solver_z=load_solver_from_pth(pth,OPz)
 
 
@@ -206,125 +204,6 @@ for k in range(num_run):
     if OP.learning_big:
         approx_3 = FeedforwardNN(OP.n_x + OP.n_u, OP.n_u)
         approx_3.load_state_dict(torch.load("app_mpc.pth"))
-        '''
-        OP.init_small(approx_3)
-        x_opt=[]
-        u0_opt=[]
-        for r in range(10):
-            x0=np.random.uniform(np.array([[0.1], [0.1], [50], [50]]),
-                              np.array([[2], [2], [140], [140]]))  # np.array([[0.8],[0.5],[134.14],[130.0]])
-            u0 = np.array([[np.random.uniform(5,100)],[np.random.randint(0,2)*-8500]])#5,-8500
-
-            for k in range(num_time):
-
-                x_all = time.time()
-                zk_batch = torch.rand(batch_size*num_scen,OP.n_z, device=device)#
-                x0=torch.hstack([torch.repeat_interleave(torch.Tensor([x0[0][0]/2, x0[1][0]/2,x0[2][0]/140, x0[3][0]/140]).reshape(1, 4), batch_size*num_scen,
-                                             dim=0)]).to(device=device)
-                uapp_old = torch.hstack(
-                    [torch.repeat_interleave(torch.Tensor([u_app[0][0]/100, -u_app[1][0]/8500]).reshape(1, 2), batch_size*num_scen,
-                                             dim=0)]).to(device=device)
-
-                u0_old = torch.hstack(
-                    [torch.repeat_interleave(torch.Tensor([u0[0][0] / 100, -u0[1][0] / 8500]).reshape(1, 2),
-                                             batch_size * num_scen,
-                                             dim=0)]).to(device=device)
-                #uapp_old=u0_old
-                u_tilde = u0_old#torch.hstack(
-                    #[torch.repeat_interleave(torch.Tensor([0.05, 0]).reshape(1, 2),
-                    #                         batch_size * num_scen,
-                    #                         dim=0)]).to(device=device)
-
-
-
-
-                xk_batch = OP.batch_gen_x_new_cas(batch_size, x0, uapp_old)
-                num_scenarios = len(OP.c_scen) ** OP.N_r
-                #for s in range(1):
-                u = np.zeros((len(OP.c_scen) ** OP.N_r, OP.N_r * OP.n_u))
-                u_ges = np.zeros((len(OP.c_scen) ** OP.N_r, OP.N * OP.n_u))
-
-                # Gather the results
-                # for m,result in enumerate(results):
-                # res = result
-
-                # u_traj=np.array(np.split(np.array([res['x'][OP.n_x * OP.N:OP.n_x * OP.N + OP.n_u*OP.N].full()]).squeeze(),OP.n_u)).T
-                # u0 = u_traj[0].reshape((OP.n_u, 1))
-                # u[m] = u_traj[0:OP.N_r].reshape((OP.n_u*OP.N_r,))
-                # u_ges[m] = u_traj.reshape((OP.N*OP.n_u,))
-                # for m in range(num_scenarios):
-                # x=xk_batch[m]
-                x = time.time()
-                res = OP.casadi_solve(xk_batch)
-                if not OP.ca_solver.stats()['success']:
-                    break
-                y = time.time()
-                print(y - x)
-                # for m in range(num_scenarios):
-                #    res=results[m]
-                u_traj = np.array(
-                    np.split(np.array([res['x'][OP.n_x * OP.N:OP.n_x * OP.N + OP.n_u * OP.N].full()]).squeeze(), OP.n_u)).T
-                print()
-                u0 = u_traj[0].reshape((OP.n_u, 1))
-                u = u_traj[0:OP.N_r].reshape((OP.n_u * OP.N_r,))
-                u_ges = u_traj.reshape((OP.N * OP.n_u,))
-                if not OP.multistage:
-                    xk_batch = OP.update_x_batch_cas(batch_size, u, x0, u0_old)
-
-                u_int = np.zeros((OP.num_scen ** OP.n_p, OP.N))
-                u = np.array(
-                    [res['x'][OP.n_x * OP.N + OP.N + k * OP.n_vars:OP.n_x * OP.N + 2 * OP.N + k * OP.n_vars].full() for k in
-                     range(OP.num_scen ** OP.n_p)])
-
-                for m in range(OP.num_scen ** OP.n_p):
-
-                    summe = 0
-                    for i in range(len(u[0])):  # -1,-1,-1):
-                        #    # print("k:"+str(k)+" i:"+str(i))
-                        summe = summe + u[m, i]
-                        if summe > 0.5:
-                            summe -= 1
-                            u_int[m, i] = 1
-                ### Testen
-                xk_batch2 = OPz.batch_gen_x_new_cas(batch_size, x0, uapp_old[:, 0], u_int)
-                res2 = OPz.casadi_solve(xk_batch2)
-                if not OPz.ca_solver.stats()['success']:
-                    break
-                u0 = np.array([res['x'][80].full()[0], res['x'][100].full()[0]]) * np.array([[100], [-8500]])
-                uapp_old = u_app
-                u_app = np.array([[res2['x'][80].full()[0][0]], [u_int[0][0]]]) * np.array([[100], [-8500]])
-                x0_curr=np.array(x0[0,:].detach().cpu().T)
-                x_curr=np.concatenate((x0_curr.reshape((-1,1)),uapp_old))
-                if OP.ca_solver.stats()['success'] and OPz.ca_solver.stats()['success']:
-                    x_opt.append(x_curr)
-                    u0_opt.append(u_app)
-                p_num = simulator.get_p_template()
-                p_num['alpha'] = np.random.uniform(0.95, 1.05)
-                p_num['beta'] = np.random.uniform(0.9, 1.1)
-                p_num['C_A0'] = np.random.uniform(4.5, 5.7)
-                p_num['T_in'] = np.random.uniform(120, 140)
-                p_num['m_k'] = np.random.uniform(4, 6)
-                p_num['H_R_ab'] = np.random.uniform(3.8, 4.6)
-                p_num['H_R_bc'] = np.random.uniform(-12, -10)
-
-
-                def p_fun(t_now):
-                    return p_num
-
-
-                simulator.set_p_fun(p_fun)
-                y_next = simulator.make_step(u_app)
-                x0 = estimator.make_step(y_next)
-
-        x_opt = torch.tensor(x_opt, device=OP.device, dtype=torch.float32).squeeze()
-        u0_opt = torch.tensor(u0_opt, device=OP.device, dtype=torch.float32).squeeze()
-        data = TensorDataset(x_opt, u0_opt)
-        data_dir = Path(data_dir)
-        torch.save(data, data_dir.joinpath('data_n' + str(250) + '_opt.pth'))
-        
-        OP.default_training(n_samples=250,n_epochs=10)
-        torch.save(approx_3.state_dict(), "model_4.pth")
-        '''
 
     u=np.array([[-8.12521285e-09 ,-7.73606113e-09 ,-6.65586438e-09 ,-2.52201699e-09,  8.87578832e-02 , 9.99999972e-01 , 9.99999952e-01,  9.99443734e-01,  4.97773547e-01 , 3.15338343e-01 , 1.96426109e-01 , 1.20031194e-01,  7.24789108e-02 , 4.34530739e-02 , 2.59412196e-02 , 1.54494593e-02,  9.19048179e-03,  5.46748878e-03,  3.25877616e-03 , 1.95676924e-03,  1.14130145e-03 , 6.81675679e-04  ,5.03706138e-04,  5.17466214e-04]]).reshape((24,1))
     x1=np.array([[0.60350562 ,0.77014999, 1.01003724 ,1.32216325 ,1.63453204, 1.56819683, 1.40707013, 1.20893782, 1.12759772, 1.07732449, 1.0464358, 1.02774117, 1.01652375, 1.00982534 ,1.0058364,  1.00346467, 1.00205569, 1.00121895 ,1.00072198 ,1.00042599 ,1.00025809 ,1.00015982,1.00009,1.00001 ]]).reshape((24,1))
@@ -358,11 +237,8 @@ for k in range(num_run):
                 [torch.repeat_interleave(torch.Tensor([u0[0][0] / 100, -u0[1][0] / 8500]).reshape(1, 2),
                                          batch_size * num_scen,
                                          dim=0)]).to(device=device)
-            #uapp_old=u0_old
-            u_tilde = u0_old#torch.hstack(
-                #[torch.repeat_interleave(torch.Tensor([0.05, 0]).reshape(1, 2),
-                #                         batch_size * num_scen,
-                #                         dim=0)]).to(device=device)
+
+            u_tilde = uapp_old
 
 
 
@@ -450,13 +326,13 @@ for k in range(num_run):
                 u=zk_batch[:,OP.n_x*OP.N+1:(OP.n_x+OP.n_u)*OP.N:2]
                 u_int = torch.zeros_like(u)
 
-                # Iterate along the second axis (columns) for all rows
-                summe = torch.zeros(u.shape[0], device=u.device)  # Keeps track of cumulative sums per row
+
+                summe = torch.zeros(u.shape[0], device=u.device)
 
                 for i in range(u.shape[1]):
-                    summe += u[:, i]  # Add current column values to cumulative sum
-                    exceeds_threshold = summe > 0.5  # Check where cumulative sum exceeds threshold
-                    u_int[exceeds_threshold, i] = 1  # Set u_int where condition is met
+                    summe += u[:, i]
+                    exceeds_threshold = summe > 0.5
+                    u_int[exceeds_threshold, i] = 1
                     summe[exceeds_threshold] -= 1
 
 

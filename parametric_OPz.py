@@ -25,7 +25,6 @@ class parametricOPz():
         self.eps_fb = eps_fb
         self.rho = 1.0
         if self.obj_type == "nonlinear":
-            #self.x0=torch.Tensor([[0.5],[0.5]])
             self.dt=dt
             self.N=N
             self.N_r=N_r
@@ -38,7 +37,7 @@ class parametricOPz():
             self.n_u=n_u
             self.n_x_traj = self.n_x * (self.N + 1)
             self.n_u_traj = self.n_u * self.N
-            self.multistage=False
+            self.multistage=True
 
             # variables
             self.states = ['C_a','C_b','T_R','T_K']
@@ -164,7 +163,7 @@ class parametricOPz():
         self.n_nu = self.n_eq
         self.n_lam = self.n_ineq
     def gen_C_Q_G(self):
-        #D = torch.new_zeros(self.n_eq, self.n_vars)
+
         C = torch.zeros(self.n_eq, self.n_vars, self.n_vars)
         Q= torch.zeros(self.n_vars, self.n_vars)
         self.Q1=torch.eye(self.N,self.N)
@@ -178,33 +177,23 @@ class parametricOPz():
             G[2 * k, 3 * k] = 1
             G[2 * k + 1, 3 * k] = -1
             if k == 0:
-                Q[0,0]=1#1
-                Q[1,1]=1#Q[self.N,self.N]=1
+                Q[0,0]=1
+                Q[1,1]=1
                 R[0,0]=.1
-                #R[1,1]=1e-5
-                #D[0:2, 0] = -self.p*self.dt * self.c1
-                #D[0, 1] = -1
-                #D[1, 0] = -self.dt * self.c2 * p[1]
-                #D[1, 2] = -1
+
             else:
                 ind = 3 * k
                 Q[4*k,4*k]=1
-                Q[4*k+1,4*k+1]=1#Q[k+self.N,k+self.N]=1
+                Q[4*k+1,4*k+1]=1
                 R[k, k] = 0.1
-                #R[ 2*k+1, 2*k+1] = 1e-5#1e-6#e-4
-                #D[2 * k, ind - 2] = 1 + self.dt
                 C[2 * k, ind - 2, ind - 1] = -self.dt
                 C[2 * k, ind - 2, ind - 1] = - self.c1 * self.dt
-                #D[2 * k, ind - 1] = 0
                 C[2 * k, ind - 1] = -self.dt
                 C[2 * k, ind, ind - 2] = -self.dt * self.c1
-                #D[2 * k, ind + 1] = -1
-                C[2 * k + 1, ind - 2, 3 * k - 1] = self.dt  # 1 + self.dt * (1 - y[3 * k - 1] - self.c1 * y[3 * k])
-                #D[2 * k + 1, 3 * k - 1] = 1 + self.dt * (-1)
+                C[2 * k + 1, ind - 2, 3 * k - 1] = self.dt
                 C[2 * k + 1, 3 * k - 1, 3 * k - 2] = self.dt
                 C[2 * k + 1, 3 * k - 1, 3 * k] = - self.c2 * self.dt
                 C[2 * k + 1, 3 * k, 3 * k - 1] = -self.dt * self.c2
-                #D[2 * k + 1, 3 * k + 2] = -1
 
         return C,Q,G,R
     def _setup_op(self):
@@ -245,7 +234,6 @@ class parametricOPz():
 
     
     def _setup_functions(self):
-        # Objective Function
         self.f_nonlinear_grad = torch.func.grad(self.f_nonlinear, argnums=0)
         self.h_func_grad = torch.func.jacrev(self.h_func, argnums=0)
         self.g_func_grad = torch.func.jacrev(self.g_func, argnums=0)
@@ -318,15 +306,12 @@ class parametricOPz():
         return f_val
     def f_nonlinear(self,y,x):
         rho_curr = x[self.n_x + self.n_p+self.N] * 40
-        self.c = x[self.n_x:self.n_x + self.n_p]  # self.n_p*self.N
-        # lam_curr = x[self.n_x + self.n_p  + 1:self.n_x + self.n_p + self.N_r * self.n_u + 1]
+        self.c = x[self.n_x:self.n_x + self.n_p]
+
         lam_F = x[
                 self.n_x + self.n_p + 1+self.N:self.n_x + self.n_p + self.n_u  + 1+self.N]
         F_tilde = x[
                   self.n_x + self.n_p + self.n_u + 1+self.N:self.n_x + self.n_p + 2 * self.n_u + 1+self.N]
-
-        # u_tilde_curr = x[
-        #                    self.n_x + self.n_p + self.N_r * self.n_u + 1:self.n_x + self.n_p + self.N_r * self.n_u * 2 + 1]
         past_u = x[
                  self.n_x + self.n_p +self.N+ self.N_r * self.n_u * 2 + 1:self.n_x + self.n_p +self.N+ self.N_r * self.n_u * 3 + 1]
         u_past = torch.hstack((past_u, y[self.n_x * self.N:self.N * (self.n_x + self.n_u) - self.n_u]))
@@ -339,23 +324,6 @@ class parametricOPz():
                     u - u_past).T @ self.R @ (u - u_past) + lam_F[0] * (u[0] - F_tilde[0]) + rho_curr / 2 * (
                                    (u[0] - F_tilde[0]) ** 2))
 
-        #rho_curr = x[self.n_x + self.n_p+self.N ]*40
-        #self.c = x[self.n_x:self.n_x + self.n_p]#self.n_p*self.N
-        #lam_curr = x[self.n_x + self.n_p + 1+self.N:self.n_x + self.n_p + self.N_r * self.n_u + 1+self.N]
-        #u_tilde_curr = x[
-        #                    self.n_x + self.n_p + self.N_r * self.n_u + 1+self.N:self.n_x + self.n_p + self.N_r * self.n_u * 2 + 1+self.N]
-        #past_u=x[self.n_x + self.n_p  + self.N_r * self.n_u * 2 + 1+self.N:self.n_x + self.n_p  + self.N_r * self.n_u * 2 + 1+self.n_u+self.N]
-        #u_past=torch.hstack((past_u,y[self.n_x*self.N:self.N*(self.n_x+self.n_u)-self.n_u]))
-        #u=y[self.n_x*self.N:self.N*(self.n_x+self.n_u)]
-        #c_a=y[:self.N*self.n_x:self.n_x]
-        #c_b = y[1:self.N * self.n_x:self.n_x]
-        #T_R = y[2:self.N * self.n_x:self.n_x]
-
-        #c_a = torch.clamp(c_a, max=1, min=0.05)
-        #c_b = torch.clamp(c_b, max=1, min=0.05)
-        #T_R = torch.clamp(T_R, max=1, min=50/140)
-
-        #f_val=0.1*(((c_a-0.35).T@self.Q1@(c_a-0.35))+((c_b-0.3).T@self.Q2@(c_b-0.3))+(u-u_past).T@self.R@(u-u_past)+lam_curr.T@(y[self.n_x*self.N:self.N*(self.n_x)+self.n_u*self.N_r]-u_tilde_curr)+torch.sum(0.5*rho_curr*torch.linalg.norm((y[self.n_x*self.N:self.N*(self.n_x)+self.n_u*self.N_r].reshape(-1,self.n_u)-u_tilde_curr.reshape(-1,self.n_u))+1e-8,dim=1,ord=2)**2))#(u-u_past).T@self.R@(u-u_past)#torch.sum((y[1:3:-1]-1)**2)+torch.sum((y[2:3:-1]-1)**2)
         return f_val
     # Coupled Rosenbrock
     def f_rosenbrock(self,y):
@@ -374,19 +342,7 @@ class parametricOPz():
         10*n_y + sum(y_i^2 - 10*cos(2*pi*y_i))"""
         f_val = torch.sum(y**2 - 10*torch.cos(2*torch.pi*y) + 10)
         return f_val
-    '''
-    def h_func(self,y,x):
-        """Equality constraints function.
-        A y - x"""
-        h_val = self.A @ y - x
-        return h_val
-    
-    def g_func(self,y):
-        """Inequality constraints function.
-        G y - h"""
-        g_val = self.G @ y - self.h
-        return g_val
-    '''
+
     def f_quad_grad(self,y):
         """Objective gradient function.
         Q y + p"""
@@ -457,13 +413,8 @@ class parametricOPz():
     def batch_gen_x(self,n_batch):
         return 2.0*torch.rand(n_batch,self.n_eq,device=self.device)-1.0
     def batch_gen_x_random(self,n_batch):
-        #self.get_random_scenario(n_batch)
         c=self.get_random_scenario(n_batch)
-        #c2=0.1*torch.rand(n_batch,self.N)+0.15
-        #c=torch.stack((c1,c2), dim=2).flatten().reshape(-1,self.N*2)
-#torch.concatenate((c1,c2),dim=1)
         self.c = c
-        #self.u_tilde = torch.rand(n_batch * self.num_cons, self.n_u)
         lam = 2e-3*torch.rand(n_batch , self.N_r * self.n_u)-1e-3#*2
         rho_new=0.7*torch.rand(n_batch,1)
         u_tilde = torch.tensor([[0.95]],device=self.device).T*torch.rand(n_batch, self.n_u)+torch.tensor([[0.05]],device=self.device).T#torch.rand(n_batch, self.N_r * self.n_u)#self.spread_to_scenarios(self.u_tilde, n_batch)
@@ -482,14 +433,11 @@ class parametricOPz():
         past_u=xk_batch[:,self.n_x+self.n_p+5].reshape(-1,1)
         u_int = torch.zeros((n_batch, self.N),device=self.device)
 
-        # if k==4 or k==3 or k==5:
-        # u0=np.array([res['x'][2*N:2*N+2].full()]).reshape((2,1))
-        # u_cas=np.array(res['x'][2*N:3*N].full()).reshape((N,1))
+
         for m in range(n_batch):
 
             summe = 0
-            for i in range(self.N):  # -1,-1,-1):
-                #    # print("k:"+str(k)+" i:"+str(i))
+            for i in range(self.N):
                 summe = summe + Q_dot_rel[m, i]
                 if summe > 0.5:
                     summe -= 1
@@ -497,26 +445,16 @@ class parametricOPz():
         x = torch.hstack([x0, c, u_int, rho_new, lam, u_tilde, past_u])
         return x
     def batch_gen_x_new(self,n_batch,x0=torch.tensor([]),u0=torch.tensor([]),Q_dot=torch.tensor([])):
-        #c1=torch.Tensor([0.3,0.5])
-        #c2=torch.Tensor([0.1,0.3])
-        c = self.get_scenarios(n_batch)  # torch.Tensor((torch.repeat_interleave(torch.Tensor([[0.3],[0.1]]),self.N,axis=1).T,torch.repeat_interleave(torch.Tensor([[0.3],[0.3]]),self.N,axis=1).T,torch.repeat_interleave(torch.Tensor([[0.5],[0.1]]),self.N,axis=1).T,torch.repeat_interleave(torch.Tensor([[0.3],[0.1]]),self.N,axis=1).T)
-        #c1 = 0.1 * torch.rand(n_batch, self.N) + 0.35  # self.get_random_scenario(n_batch)
-        #c2 = 0.1 * torch.rand(n_batch, self.N) + 0.15
-        #c = torch.stack((c1, c2), dim=2).flatten().reshape(-1, self.N * 2)
-        #   )
+
+        c = self.get_scenarios(n_batch)
         self.num_cons = sum([len(self.c_scen) ** k for k in range(self.N_r)])
-        self.rho_new = 0.01/20#0.01/20#torch.rand(n_batch,1,device=device).repeat_interleave(len(self.c_scen)**self.N_r,dim=0)#0.1
+        self.rho_new = 0.01/20
         self.c = c
-        self.u_tilde=u0#torch.zeros(n_batch*self.num_cons,self.n_u)
+        self.u_tilde=u0
         self.lam=torch.zeros(n_batch*(len(self.c_scen)**self.N_r),self.N_r*self.n_u)
-        u_tilde=self.spread_to_scenarios(self.u_tilde,n_batch)#torch.rand(n_batch*(len(self.c_scen)**self.N_r),self.N_r*self.n_u)
-        #for k in range(n_batch):
+        u_tilde=self.spread_to_scenarios(self.u_tilde,n_batch)
+
         past_u = torch.zeros(n_batch, self.n_u)
-        #    #p=torch.combinations(torch.Tensor([[c1],[c2]]),r=3)
-        #    u_tilde_part = torch.zeros(self.num_cons, self.n_u, device=device)
-        #    u_tilde=self.spread_to_scenarios(u_tilde_part)
-        #    self.u_tilde[k]=u_tilde_part
-        #    #lam=self.spread_to_scenarios(self.lam)
 
         if x0.numel()==0:
             x=torch.hstack([1.5*torch.rand(n_batch,self.n_x,device=self.device).repeat_interleave(len(self.c_scen)**self.N_r,dim=0),c,torch.tensor([[self.rho_new]],device=self.device).repeat_interleave(n_batch*len(self.c_scen)**self.N_r,dim=0),self.lam,u_tilde,past_u])
@@ -525,25 +463,15 @@ class parametricOPz():
                 [x0, c,Q_dot,torch.tensor([[self.rho_new]],device=self.device).repeat_interleave(n_batch*len(self.c_scen)**self.N_r,dim=0), self.lam, u_tilde,u0])
         return x#torch.rand(n_batch,self.n_x,device=device)
     def batch_gen_x_new_cas(self,n_batch,x0=torch.tensor([]),u0=torch.tensor([]),Q_dot=torch.tensor([])):
-        #c1=torch.Tensor([0.3,0.5])
-        #c2=torch.Tensor([0.1,0.3])
-        c = self.get_scenarios(n_batch)  # torch.Tensor((torch.repeat_interleave(torch.Tensor([[0.3],[0.1]]),self.N,axis=1).T,torch.repeat_interleave(torch.Tensor([[0.3],[0.3]]),self.N,axis=1).T,torch.repeat_interleave(torch.Tensor([[0.5],[0.1]]),self.N,axis=1).T,torch.repeat_interleave(torch.Tensor([[0.3],[0.1]]),self.N,axis=1).T)
-        #   )
+
+        c = self.get_scenarios(n_batch)
         c=np.array(c.cpu())
         self.num_cons = sum([len(self.c_scen) ** k for k in range(self.N_r)])
-        self.rho_new = 0.005/20#torch.rand(n_batch,1,device=device).repeat_interleave(len(self.c_scen)**self.N_r,dim=0)#0.1
+        self.rho_new = 0.005/2
         self.c = c
         self.u_tilde=np.zeros((n_batch*self.num_cons,self.n_u))
         self.lam=np.zeros((n_batch*(len(self.c_scen)**self.N_r),self.N_r*self.n_u))
-        u_tilde=np.array(self.spread_to_scenarios(torch.tensor(self.u_tilde),n_batch).cpu())#torch.rand(n_batch*(len(self.c_scen)**self.N_r),self.N_r*self.n_u)
-        #for k in range(n_batch):
-
-        #    #p=torch.combinations(torch.Tensor([[c1],[c2]]),r=3)
-        #    u_tilde_part = torch.zeros(self.num_cons, self.n_u, device=device)
-        #    u_tilde=self.spread_to_scenarios(u_tilde_part)
-        #    self.u_tilde[k]=u_tilde_part
-        #    #lam=self.spread_to_scenarios(self.lam)
-
+        u_tilde=np.array(self.spread_to_scenarios(torch.tensor(self.u_tilde),n_batch).cpu())
         if x0.numel()==0:
             x=np.array([np.array(1.5*torch.rand(n_batch,self.n_x,device=self.device).repeat_interleave(len(self.c_scen)**self.N_r,dim=0).cpu()),c,torch.tensor([[self.rho_new]],device=self.device).repeat_interleave(n_batch*len(self.c_scen)**self.N_r,dim=0),self.lam,u_tilde])
         else:
@@ -555,7 +483,7 @@ class parametricOPz():
                     torch.tensor([[self.rho_new]], device=self.device).repeat_interleave(
                         n_batch * len(self.c_scen) ** self.N_r, dim=0).cpu()), self.lam, u_tilde, np.array(u0.cpu())))
 
-        return x#torch.rand(n_batch,self.n_x,device=device)
+        return x
     def update_x_batch(self,n_batch,zk_batch,xk_batch,u0_old,Q_dot,Tk_batch):
         c=self.get_scenarios(n_batch)
         mask = (Tk_batch < 1e0)
@@ -564,22 +492,19 @@ class parametricOPz():
         self.lam=self.lam+self.rho_new*(u-self.spread_to_scenarios(self.u_tilde,n_batch))
         self.u_tilde = self.update_u_tilde(u_update,n_batch)
         u_tilde=self.spread_to_scenarios(self.u_tilde,n_batch)
-
-        self.rho_new=min(self.rho_new*2.2,0.7)#0.01/20*1.2**42)
-
+        self.rho_new=min(self.rho_new*2.2,0.7)
         x = torch.hstack([xk_batch[:,:self.n_x], c,Q_dot,torch.tensor([[self.rho_new]],device=self.device).repeat_interleave(n_batch*len(self.c_scen)**self.N_r,dim=0), self.lam, u_tilde,u0_old])
         return x
 
     def update_x_batch_cas(self, n_batch, u, x0,u0):
         c = self.get_scenarios(n_batch)
         c=np.array(c.cpu())
-        #u = zk_batch[:, self.n_x * self.N:self.n_x * self.N + self.N_r * self.n_u].clone()
 
         self.lam = self.lam + self.rho_new * (u - np.array(self.spread_to_scenarios(torch.tensor(self.u_tilde), n_batch).cpu()))
         self.u_tilde = np.array(self.update_u_tilde(torch.tensor(u), n_batch).cpu())
         u_tilde =  np.array(self.spread_to_scenarios(torch.tensor(self.u_tilde),n_batch).cpu())
 
-        self.rho_new = min(self.rho_new*1.2,1)#min(self.rho_new * 2, 1)
+        self.rho_new = min(self.rho_new*1.2,1)
 
         x = np.hstack((np.array(x0.cpu()), c, np.array(torch.tensor([[self.rho_new]], device=self.device).repeat_interleave(
             n_batch * len(self.c_scen) ** self.N_r, dim=0).cpu()), self.lam, u_tilde,np.array(u0.cpu())))
@@ -588,21 +513,29 @@ class parametricOPz():
         ind=np.random.randint(0,len(self.c_scen),(n_batch,self.N_r))
 
         c= [[self.c_scen[ind[m][k]] for k in range(self.N_r)] for m in range(n_batch)]
-        c_add = [[c[m][-1] for r in range(self.N - self.N_r)]for m in range(n_batch)]
-        c=[c[m] for m in range(n_batch)]#+c_add[m]
+        c=[c[m] for m in range(n_batch)]
         return torch.tensor(c).reshape(n_batch,-1)
 
     def update_u_tilde(self,u,n_batch):
-        u_tilde=torch.zeros(self.num_cons*n_batch,self.n_u)
+        u_first = (torch.sum(u, axis=0) / len(u)).reshape(-1, self.n_u)
+        self.u_tilde = self.spread_to_scenarios(u_first, n_batch)
+        t = torch.abs(u - self.u_tilde)
+        w = t ** 1.5
 
-        for m in range(n_batch):
-            ind_2=0
-            for k in range(self.N_r):
-                num_adds = len(self.c_scen)**(self.N_r-k)
-                num_scenarios=len(self.c_scen)**k
-                for ind_1 in range(num_scenarios):
-                    u_tilde[ind_2+self.num_cons*m,:]=torch.sum(u[len(self.c_scen)**self.N_r*m+ind_1*num_adds:len(self.c_scen)**self.N_r*m+(ind_1+1)*num_adds,2*k:2*k+2],dim=0)/num_adds
-                    ind_2+=1
+        if self.N_r == 1 and n_batch == 1:
+            # u_tilde=torch.zeros(1,self.n_u)
+            u_tilde = (torch.sum(w * u, axis=0) / torch.sum(w, axis=0)).reshape(-1, self.n_u)
+        else:
+            u_tilde=torch.zeros(self.num_cons*n_batch,self.n_u)
+
+            for m in range(n_batch):
+                ind_2=0
+                for k in range(self.N_r):
+                    num_adds = len(self.c_scen)**(self.N_r-k)
+                    num_scenarios=len(self.c_scen)**k
+                    for ind_1 in range(num_scenarios):
+                        u_tilde[ind_2+self.num_cons*m,:]=torch.sum(u[len(self.c_scen)**self.N_r*m+ind_1*num_adds:len(self.c_scen)**self.N_r*m+(ind_1+1)*num_adds,2*k:2*k+2],dim=0)/num_adds
+                        ind_2+=1
         return u_tilde
     def spread_to_scenarios(self,value,n_batch):
         new_value=torch.zeros(len(self.c_scen)**self.N_r*n_batch,self.N_r*self.n_u)
@@ -610,7 +543,6 @@ class parametricOPz():
             ind=0
             for r in range(self.N_r):
                 num_copies = len(self.c_scen) ** (self.N_r - r )
-                #num_values=len(self.c_scen)**r
                 for k in range(len(self.c_scen)**r):
                     new_value[s*len(self.c_scen)**self.N_r+k*num_copies:s*len(self.c_scen)**self.N_r+k*num_copies+num_copies,r*self.n_u:(r+1)*self.n_u]=value[ind].reshape((self.n_u,1)).repeat_interleave(num_copies,dim=1).T
                     ind=ind+1
@@ -647,20 +579,13 @@ class parametricOPz():
         f(y) + nu^T h(y) + lam^T g(y)"""
         L_val = self.f_func(y) + nu @ self.h_func(y,x) + lam @ self.g_func(y)
         return L_val
-    
-    #def L_grad_y_func(self,y,nu,lam):
-    #    """Lagrange function gradient w.r.t y (decision variable).
-    #    f_grad(y) + A^T nu + G^T lam"""
-    #    L_grad_y_val = self.f_grad_func(y) + self.A.T @ nu + self.G.T @ lam
-    #    return L_grad_y_val
-    
+
     def KKT_func(self,z,x):
         self.p = x
         self.rho_curr = x[self.n_x + self.n_x * self.N]
-        self.c = torch.tensor([0.4,0.2],device=self.device).repeat_interleave(self.N) #x[self.n_x:self.n_x + self.n_x * self.N]
-        self.lam_curr = torch.zeros(self.N_r * self.n_u)#x[self.n_x + self.n_x * self.N + 1:self.n_x + self.n_x * self.N + self.N_r * self.n_u + 1]
-        self.u_tilde_curr = torch.zeros(self.N_r * self.n_u)#x[
-                            #self.n_x + self.n_x * self.N + self.N_r * self.n_u + 1:self.n_x + self.n_x * self.N + self.N_r * self.n_u * 2 + 1]
+        self.c = torch.tensor([0.4,0.2],device=self.device).repeat_interleave(self.N)
+        self.lam_curr = torch.zeros(self.N_r * self.n_u)
+        self.u_tilde_curr = torch.zeros(self.N_r * self.n_u)
         y,nu,lam = torch.split(z,[self.n_vars,self.n_eq,self.n_ineq])
         L_grad_y_val = self.L_grad_y_func(y,x,nu,lam)
         h_val = self.h_func(y,x)
@@ -673,12 +598,7 @@ class parametricOPz():
     
     def Fk_func(self,z,x):
         self.p = x
-        #z=20*z
-        #self.rho_curr = x[self.n_x + self.n_x * self.N]
         self.c = x[self.n_x:self.n_x + self.n_p]
-        #self.lam_curr = x[self.n_x + self.n_x * self.N + 1:self.n_x + self.n_x * self.N + self.N_r * self.n_u + 1]
-        #self.u_tilde_curr = x[
-        #                    self.n_x + self.n_x * self.N + self.N_r * self.n_u + 1:self.n_x + self.n_x * self.N + self.N_r * self.n_u * 2 + 1]
         y,nu,lam = torch.split(z,[self.n_vars,self.n_eq,self.n_ineq])
         L_grad_y_val = self.L_grad_y_func(y,x,nu,lam)
         h_val = self.h_func(y,x)
@@ -700,14 +620,7 @@ class parametricOPz():
     
     def Fk_lin_func(self,z,x):
         self.p = x
-        #self.rho_curr = x[self.n_x + self.n_x * self.N]
-        #self.c = x[self.n_x:self.n_x + self.n_x * self.N]
-        #self.lam_curr = x[self.n_x + self.n_x * self.N + 1:self.n_x + self.n_x * self.N + self.N_r * self.n_u + 1]
-        #self.u_tilde_curr = x[
-        #                    self.n_x + self.n_x * self.N + self.N_r * self.n_u + 1:self.n_x + self.n_x * self.N + self.N_r * self.n_u * 2 + 1]
         y,nu,lam = torch.split(z,[self.n_vars,self.n_eq,self.n_ineq])
-        # Note: this is equivalent to doing a first order taylor approximation of f(y) & and considering a soft l2-constrained trust region on the decision variables y
-        # for nonlinear constraints, this expression is more involved and requires linearization of the nonlinear constraints
         L_grad_y_val = self.L_grad_y_func(y.detach(),x,nu,lam) + self.rho*(y-y.detach().clone())
         h_val = self.h_func(y,x)
         g_val = self.g_func(y)
@@ -776,13 +689,7 @@ class parametricOPz():
         else:
             raise ValueError("Objective Type not supported.")
         
-        A_sym = ca.MX(self.A.cpu().numpy())
-        G_sym = ca.MX(self.G.cpu().numpy())
-        h_sym = ca.MX(self.h.cpu().numpy())
 
-        #eq_sym = A_sym @ y_sym - x_sym
-        #ineq_sym = G_sym @ y_sym - h_sym
-        # ineq_sym = G_sym @ y_sym - h_sym
         if self.obj_type == "nonlinear":
             if self.multistage:
                 x = ca.MX.sym('x', self.num_scen**self.n_p*(self.n_x + self.n_p  + self.n_u+self.N ))
@@ -807,7 +714,7 @@ class parametricOPz():
                 R = np.zeros((self.n_u * self.N, self.n_u * self.N))
                 for k in range(self.N):
                     R[k, k] = 0.1
-                    #R[2 * k, 2 * k] = 0
+
                 f_sym = ((c_a - 0.35).T @ Q1 @ (c_a - 0.35) + (c_b - 0.3).T @ Q2 @ (c_b - 0.3) + (u - u_past).T @ R @ (
                             u - u_past))
                 for k in range(1,self.num_scen**self.n_p):
@@ -819,11 +726,7 @@ class parametricOPz():
                     ineq_sym =ca.vertcat(ineq_sym,self.g_func_cas(y_sym, x_sym[0:self.n_x]))
                     eq_sym = ca.vertcat(eq_sym,self.h_func_cas(y_sym, x_sym[0:self.n_x], x_sym[self.n_x:self.n_x + self.n_p+self.N]))
 
-                    #rho_curr = x_sym[self.n_x + self.n_p] * 20
-                    #lam_curr = x_sym[
-                    #           self.n_x + self.n_p  + 1:self.n_x + self.n_p + 1 + self.N_r * self.n_u]
-                    #u_tilde_curr = x_sym[
-                    #               self.n_x + self.n_p+ 1 + self.N_r * self.n_u:self.n_x + self.n_p  + 1 + self.N_r * self.n_u * 2]
+
                     past_u = x_sym[
                              self.n_x + self.n_p +self.N :self.n_x + self.n_p  + self.n_u+self.N]
                     u_past = ca.vertcat(past_u.T,
@@ -844,11 +747,7 @@ class parametricOPz():
                         #R[2 * k, 2 * k] = 0
                     f_sym =f_sym+ ((c_a - 0.35).T @ Q1 @ (c_a - 0.35) + (c_b - 0.3).T @ Q2 @ (c_b - 0.3) + (
                                 u - u_past).T @ R @ (
-                                    u - u_past))#+0.5 * rho_curr * (
-                                #sum([(y_sym[self.n_x * self.N + k * self.N] - u_tilde_curr[k]) ** 2 for k in
-                                #     range(self.n_u)])) + sum(
-                        #[lam_curr[k] * (y_sym[self.n_x * self.N + k * self.N] - u_tilde_curr[k]) for k in
-                        # range(self.n_u)])
+                                    u - u_past))
             else:
                 x_sym = ca.MX.sym('x', self.n_x+self.N*self.n_p+1+self.n_u*(self.N_r*2+1))
                 ineq_sym = self.g_func_cas(y_sym, x_sym[0:self.n_x])
@@ -919,9 +818,7 @@ class parametricOPz():
         c_a = y_sym[0:self.N]
         c_b = y_sym[self.N:self.N * 2]
         F = y_sym[self.n_x * self.N:self.N * (self.n_x + 1)]
-        #Q_dot = y_sym[self.n_x * (self.N) + self.N:self.N * (self.n_x + 2)]
         F_old = ca.vertcat(past_u[0], F[:-1])
-        #Q_dot_old = ca.vertcat(past_u[1], Q_dot[:-1])
         T_R = y_sym[2 * self.N:3 * self.N]
         Q1 = np.array(self.Q1.detach().cpu())
         Q2 = np.array(self.Q2.detach().cpu())
@@ -945,8 +842,6 @@ class parametricOPz():
         self.nlp_small = nlp
         self.lbg_small = lbg
         self.ubg_small = ubg
-
-        # s_opts = {'ipopt.fixed_variable_treatment': 'make_constraint','ipopt.tol': 1e-10, 'ipopt.acceptable_tol': 1e-10}
         s_opts = {'ipopt.tol': 1e-10, 'ipopt.acceptable_tol': 1e-10}
         self.ca_solver_small = ca.nlpsol('solver', 'ipopt', nlp, s_opts)
     def init_small(self,approx_mpc):
@@ -964,40 +859,26 @@ class parametricOPz():
             x_opt = []
             u0_opt = []
             c = self.get_scenarios(
-                1)  # torch.Tensor((torch.repeat_interleave(torch.Tensor([[0.3],[0.1]]),self.N,axis=1).T,torch.repeat_interleave(torch.Tensor([[0.3],[0.3]]),self.N,axis=1).T,torch.repeat_interleave(torch.Tensor([[0.5],[0.1]]),self.N,axis=1).T,torch.repeat_interleave(torch.Tensor([[0.3],[0.1]]),self.N,axis=1).T)
+                1)
             c=np.array(c.cpu())
-            # c1 = 0.1 * torch.rand(n_batch, self.N) + 0.35  # self.get_random_scenario(n_batch)
-            # c2 = 0.1 * torch.rand(n_batch, self.N) + 0.15
-            # c = torch.stack((c1, c2), dim=2).flatten().reshape(-1, self.N * 2)
-            #   )
             u_tilde = np.array((torch.tensor([[0.95], [1]], device=self.device).T * torch.rand(1, self.n_u) + torch.tensor(
                 [[0.05], [0]],
-                device=self.device).T).repeat(len(c),1).cpu()) # torch.tensor([0.05,1]).repeat(n_batch).reshape(n_batch,-1)##torch.rand(n_batch, self.N_r * self.n_u)#self.spread_to_scenarios(self.u_tilde, n_batch)
+                device=self.device).T).repeat(len(c),1).cpu())
             x0 = np.array((torch.tensor([[0.95], [0.95], [0.625], [0.625]], device=self.device).T * torch.rand(1, self.n_x,
                                                                                                      device=self.device) + torch.tensor(
                 [[0.05], [0.05], [0.375], [0.375]],
                 device=self.device).T).repeat(len(c),1).cpu())
             u0=u_tilde
             self.num_cons = sum([len(self.c_scen) ** k for k in range(self.N_r)])
-            self.rho_new = 0.2 / 20  # torch.rand(n_batch,1,device=device).repeat_interleave(len(self.c_scen)**self.N_r,dim=0)#0.1
+            self.rho_new = 0.2 / 20
             self.c = c
-            self.u_tilde = u_tilde  # torch.zeros(n_batch*self.num_cons,self.n_u)
+            self.u_tilde = u_tilde
             self.lam = np.zeros(((len(self.c_scen) ** self.N_r), self.N_r * self.n_u))
             u_tilde = np.array(self.spread_to_scenarios(torch.tensor(self.u_tilde),
-                                               1).cpu().detach())  # torch.rand(n_batch*(len(self.c_scen)**self.N_r),self.N_r*self.n_u)
-            # for k in range(n_batch):
-              # torch.zeros(n_batch, self.n_u)
-            #    #p=torch.combinations(torch.Tensor([[c1],[c2]]),r=3)
-            #    u_tilde_part = torch.zeros(self.num_cons, self.n_u, device=device)
-            #    u_tilde=self.spread_to_scenarios(u_tilde_part)
-            #    self.u_tilde[k]=u_tilde_part
-            #    #lam=self.spread_to_scenarios(self.lam)
-
-
+                                               1).cpu().detach())
             x = np.hstack(
                 [x0, c, np.array(torch.tensor([[self.rho_new]], device=self.device).repeat_interleave(
                      len(self.c_scen) ** self.N_r, dim=0).cpu()), self.lam, u_tilde, u0])
-            #x=np.array(x.cpu().detach())
             cont=True
             y_init_guess = np.random.rand(self.n_vars)
             for s in range(1):
@@ -1007,7 +888,7 @@ class parametricOPz():
                     x_curr = x[m].reshape((-1, 1))
                     res = self.ca_solver_small(x0=y_init_guess, p=x_curr, lbx=-np.inf, ubx=np.inf, lbg=self.lbg_small,
                                                ubg=self.ubg_small)
-                    u[m] = res['x'][(self.n_x+1)*self.N:self.N*(self.n_x+2)].full().reshape((-1,))#res['x'][self.n_x * self.N:(self.n_x + self.n_u) * self.N:self.N].full().reshape((-1,))
+                    u[m] = res['x'][(self.n_x+1)*self.N:self.N*(self.n_x+2)].full().reshape((-1,))
                     u_update[m]=res['x'][self.n_x * self.N:(self.n_x + self.n_u) * self.N:self.N].full().reshape((-1,))
                     if self.ca_solver_small.stats()['success']:
                         x_opt.append(x_curr)
@@ -1047,9 +928,6 @@ class parametricOPz():
         self.setup_casadi_single()
         n_batch=num_samples
         c = self.get_random_scenario(n_batch)
-        # c2=0.1*torch.rand(n_batch,self.N)+0.15
-        # c=torch.stack((c1,c2), dim=2).flatten().reshape(-1,self.N*2)
-        # torch.concatenate((c1,c2),dim=1)
         self.c = c
         # self.u_tilde = torch.rand(n_batch * self.num_cons, self.n_u)
         lam = 1e-3 * torch.rand(n_batch, self.N_r * self.n_u) - 1e-3 # *2
@@ -1368,17 +1246,13 @@ class parametricOPz():
         # assert P.shape[1] == self.np
 
         # states, inputs and parameters
-        #C_a = torch.clamp(X[:, 0].squeeze()*2,max=2,min=0.1)
-        #C_b = torch.clamp(X[:, 1].squeeze()*2,max=2,min=0.1)
-        #T_R=torch.clamp(X[:,2].squeeze()*140,max=140,min=50)
-        #T_K=torch.clamp(X[:,3].squeeze()*140,max=140,min=50)
-        #F = torch.clamp(U[:, 0].squeeze()*100,max=100,min=5)
+
         C_a=X[:, 0].squeeze()*2
         C_b=X[:, 1].squeeze()*2
         T_R=X[:, 2].squeeze() * 140
         T_K=X[:, 3].squeeze()*140
         F=U[:, 0].squeeze()*100
-        #Q_dot = -U[:, 1].squeeze()*8500
+
 
 
         # Certain parameters
@@ -1432,7 +1306,7 @@ class parametricOPz():
         T_R = X[:, 2]*140#.squeeze()
         T_K = X[:, 3]*140#.squeeze()
         F = U[:, 0]*100#.squeeze()
-        #Q_dot = -U[:, 1]*8500#.squeeze()
+
 
         # Certain parameters
         K0_ab = 1.287e12  # K0 [h^-1]
